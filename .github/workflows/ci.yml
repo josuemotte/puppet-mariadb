@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+    tags:
+      - 'v*'
+      - '*'
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby:
+          - '2.5.1'
+          - '2.4.4'
+        puppet:
+          - '~> 6.0'
+          - '~> 5.0'
+        exclude:
+          - ruby: '2.5.1'
+            puppet: '~> 5.0'
+        include:
+          - ruby: '2.5.1'
+            puppet: '~> 6.0'
+            check: 'syntax lint metadata_lint check:symlinks check:git_ignore check:dot_underscore check:test_file rubocop'
+          - ruby: '2.5.1'
+            puppet: '~> 6.0'
+            check: 'parallel_spec'
+          - ruby: '2.4.4'
+            puppet: '~> 5.0'
+            check: 'parallel_spec'
+          - ruby: '2.5.1'
+            puppet: '~> 5.0'
+            check: 'build'
+            deploy: 'yes'
+
+    env:
+      PUPPET_GEM_VERSION: ${{ matrix.puppet }}
+      BEAKER_PUPPET_COLLECTION: ${{ matrix.puppet == '~> 6.0' && 'puppet6' || 'puppet5' }}
+      CHECK: ${{ matrix.check }}
+      DEPLOY_TO_FORGE: ${{ matrix.deploy || 'no' }}
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ matrix.ruby }}
+        bundler-cache: true
+    
+    - name: Bundle setup
+      run: |
+        bundle -v
+        rm -f Gemfile.lock
+        gem update --system
+        gem --version
+        bundle -v
+        bundle install --jobs 4 --retry 3 --without system_tests
+        
+    - name: Run tests
+      run: bundle exec rake $CHECK
+      
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '2.5.1'
+          bundler-cache: true
+          
+      - name: Bundle setup
+        run: |
+          bundle -v
+          rm -f Gemfile.lock
+          gem update --system
+          gem --version
+          bundle -v
+          bundle install --jobs 4 --retry 3 --without system_tests
+          
+      - name: Build and deploy module
+        env:
+          PUPPET_FORGE_API_KEY: ${{ secrets.PUPPET_FORGE_API_KEY }}
+        run: |
+          bundle exec rake build
+          bundle exec rake module:push
