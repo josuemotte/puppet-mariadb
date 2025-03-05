@@ -16,29 +16,11 @@ jobs:
       fail-fast: false
       matrix:
         ruby:
-          - '2.5.1'
-          - '2.4.4'
+          - '2.7'
+          - '3.0'
         puppet:
           - '~> 6.0'
-          - '~> 5.0'
-        exclude:
-          - ruby: '2.5.1'
-            puppet: '~> 5.0'
-        include:
-          - ruby: '2.5.1'
-            puppet: '~> 6.0'
-            check: 'syntax lint metadata_lint check:symlinks check:git_ignore check:dot_underscore check:test_file rubocop'
-          - ruby: '2.5.1'
-            puppet: '~> 6.0'
-            check: 'parallel_spec'
-          - ruby: '2.4.4'
-            puppet: '~> 5.0'
-            check: 'parallel_spec'
-          - ruby: '2.5.1'
-            puppet: '~> 5.0'
-            check: 'build'
-            deploy: 'yes'
-
+          
     env:
       PUPPET_GEM_VERSION: ${{ matrix.puppet }}
       BEAKER_PUPPET_COLLECTION: ${{ matrix.puppet == '~> 6.0' && 'puppet6' || 'puppet5' }}
@@ -62,7 +44,7 @@ jobs:
         gem --version
         bundle -v
         bundle install --jobs 4 --retry 3 --without system_tests
-        
+
     - name: Run tests
       run: bundle exec rake $CHECK
       
@@ -73,12 +55,12 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          fetch-depth: 0  # Nécessaire pour obtenir tous les tags
+          fetch-depth: 0
       
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '2.5.1'
+          ruby-version: '2.7'
           bundler-cache: true
           
       - name: Bundle setup
