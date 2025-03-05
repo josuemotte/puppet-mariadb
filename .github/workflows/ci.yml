@@ -2,12 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches:
+      - '**'
     tags:
       - 'v*'
       - '*'
   pull_request:
-    branches: [ master ]
 
 jobs:
   test:
@@ -72,6 +72,8 @@ jobs:
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # Nécessaire pour obtenir tous les tags
       
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -88,9 +90,28 @@ jobs:
           bundle -v
           bundle install --jobs 4 --retry 3 --without system_tests
           
-      - name: Build and deploy module
+      - name: Build module
+        run: bundle exec rake build
+      
+      - name: Get version from tag
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
+          
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.get_version.outputs.VERSION }}
+          body: |
+            Release ${{ steps.get_version.outputs.VERSION }}
+            
+            See [CHANGELOG](https://github.com/${{ github.repository }}/blob/master/CHANGELOG.md) for details.
+          draft: false
+          prerelease: false
+          files: pkg/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Push to Puppet Forge
         env:
           PUPPET_FORGE_API_KEY: ${{ secrets.PUPPET_FORGE_API_KEY }}
-        run: |
-          bundle exec rake build
-          bundle exec rake module:push
+        run: bundle exec rake module:push
